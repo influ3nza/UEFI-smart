@@ -7,18 +7,22 @@
 
 int main() {
     // 要写入的8字节数字
-    uint64_t number = 1234567890123456789ULL;  // 示例数字
+    uint8_t cc[] = {0x07, 0x00, 0x00, 0x00, 
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
+        0xc6, 0xe8, 0x10, 0x00, 0x00, 0x00, 0x80, 0x81,
+        0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+    };
 
     // 打开文件
-    int fd = open(VAR_PATH, O_WRONLY);
+    int fd = open(VAR_PATH, O_WRONLY | O_CREAT);
     if (fd == -1) {
         perror("Error opening file");
         return 1;
     }
 
     // 写入数字
-    ssize_t bytes_written = write(fd, &number, sizeof(number));
-    if (bytes_written != sizeof(number)) {
+    ssize_t bytes_written = write(fd, cc, sizeof(cc));
+    if (bytes_written != sizeof(cc)) {
         perror("Error writing to file");
         close(fd);
         return 1;

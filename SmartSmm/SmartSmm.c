@@ -603,6 +603,8 @@ SmartSmiHandler (
         NULL
     );
     
+	DEBUG((DEBUG_INFO, "size is %ld\n", VariableSize));
+
     if (Status == EFI_BUFFER_TOO_SMALL) {
         VariableData = AllocateZeroPool(VariableSize > 4096 ? VariableData : 4096);
         if (VariableData == NULL) {
@@ -619,6 +621,12 @@ SmartSmiHandler (
 
         if (!EFI_ERROR(Status)) {
             DEBUG((EFI_D_INFO, "Variable Data: 0x%016lx\n", VariableData));
+
+			for (UINT64 j = 0; j < VariableSize; ++j) {
+				DEBUG((DEBUG_INFO, "0x%02x ", ((UINT8 *)VariableData)[j]));
+			}
+			DEBUG((DEBUG_INFO, "\n"));
+
         } else {
             DEBUG((EFI_D_INFO, "Get Variable failed: %r\n", Status));
 			return EFI_WARN_INTERRUPT_SOURCE_QUIESCED;
@@ -637,7 +645,6 @@ SmartSmiHandler (
 	}
 
 	if (Req->ParameterId == 0) {
-		DEBUG((DEBUG_INFO, "into here\n"));
 		EFI_PHYSICAL_ADDRESS BufferAddress = 0UL;
 		Status = gSmst->SmmAllocatePages(AllocateAnyPages, EfiRuntimeServicesData, 1, &BufferAddress);
 		ASSERT_EFI_ERROR(Status);
@@ -648,7 +655,7 @@ SmartSmiHandler (
 		Status = CmdPhysRead(DataPtr, BufferAddress, BytesToRead);
 
 		for (UINT64 i = 0; i < BytesToRead; ++i) {
-			DEBUG((DEBUG_INFO, "%d\n", ((char *)DataPtr)[i]));
+			DEBUG((DEBUG_INFO, "%d\n", ((UINT8 *)BufferAddress)[i]));
 		}
 
 		ASSERT_EFI_ERROR(Status);
