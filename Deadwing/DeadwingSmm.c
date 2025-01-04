@@ -362,7 +362,7 @@ MemTranslateVirtualToPhys(
 	if(Pte.Bits.Present)
 		return ((Pte.Bits.Pfn << EFI_PAGE_SHIFT) + ((UINT64)Address & 0xFFF));
 	else
-		SerialPrint("[ SMM ] PTE is not present for current virtual address\r\n");
+		DEBUG((DEBUG_INFO, "[ SMM ] PTE is not present for current virtual address\r\n"));
 
 	return 0;
 }
@@ -382,7 +382,7 @@ MemProcessOutsideSmramPhysMemory(
 	UINT8 PageSize = EDeadwingPage4Kb;
 	UINT64 RemapedMemory = gRemapPage;
 	UINT64 SmmDir = AsmReadCr3();
-    DEBUG((EFI_D_INFO, "[DeadwingSmm] SmmDir: %x\n", SmmDir));
+    DEBUG((EFI_D_INFO, "[DeadwingSmm] SmmDir: 0x%016lx, 0x%016lx, 0x%016lx\n", SmmDir, RemapedMemory, PhysAddress));
     
 	if(MemRemapAddress(gRemapPage, PhysAddress, SmmDir, &PageSize)) {		
 		if(PageSize == EDeadwingPage1Gb) {
@@ -460,7 +460,12 @@ CmdPhysRead(
 	IN UINT64  LengthToRead
 ) {
 	DEBUG((EFI_D_INFO, "[ SMM ] Reading from physical memory1\r\n"));
-
+	BOOLEAN check = MemCheckPagingEnabled();
+	if (check == TRUE) {
+		DEBUG((EFI_D_INFO, "[] SMI enabled\n"));
+	} else {
+		DEBUG((EFI_D_INFO, "[DeadwingSmm] SMI not enabled\n"));
+	}
 	// validate input
 	if((!AddressToRead || !LengthToRead || !ReceivedInfo) || LengthToRead > BASE_4KB) {
         DEBUG((EFI_D_INFO, "[ SMM ] Invalid parameters has been passed to specific command\r\n"));
@@ -487,7 +492,7 @@ CmdPhysRead(
 
 		// PhysMemCpy(InterimPage, PhysMapped, LengthToRead);
 
-        // DEBUG((EFI_D_INFO, "[ SMM ] After phsmemcpy\r\n"));
+        DEBUG((EFI_D_INFO, "[ SMM ] 0x%016lx, 0x%016lx\r\n", PhysMapped, AddressToRead));
 
 		// MemRestoreSmramMappings();
 
@@ -510,7 +515,7 @@ CmdPhysRead(
 
         // DEBUG((EFI_D_INFO, "[ SMM ] After second phsmemcpy\r\n"));
 
-		// MemRestoreSmramMappings();
+		MemRestoreSmramMappings();
 	} else {
 		DEBUG((EFI_D_INFO, "[ SMM ] Unable to map physical address\r\n"));
 		// gSmst->SmmFreePages(InterimPage, 1);
@@ -518,6 +523,86 @@ CmdPhysRead(
 	}
 
 	// gSmst->SmmFreePages(InterimPage, 1);
+
+	return EFI_SUCCESS;
+}
+
+/**
+ * \brief Writes data to provided physical address
+ * 
+ * \param AddressToWrite Provided physical address which should
+ *                       be modified
+ * \param DataToWrite    Provided data which should be written to
+ *                       specified physical address (virtual buffer)
+ * \param LengthToWrite  Size of data
+ * 
+ * \return EFI_SUCCESS - Operation was performed succesfully
+ * \return EFI_INVALID_PARAMETER - One or more arguments are invalid
+ * \return EFI_ABORTED - Unable to translate or map address
+ * \return Other - Ynable to allocate interim page
+ */
+EFI_STATUS
+EFIAPI
+CmdPhysWrite(
+	IN VOID    *AddressToWrite,
+	IN VOID    *DataToWrite,
+	IN UINT64   LengthToWrite 
+) {
+	DEBUG((DEBUG_INFO, "[ SMM ] Writing to the physical memory\r\n"));
+	
+	DataToWrite = (void *)0x1;
+
+	// validate input
+	if((!AddressToWrite || !DataToWrite || !LengthToWrite) || LengthToWrite > BASE_4KB) {
+		DEBUG((DEBUG_INFO, "[ SMM ] Invalid parameters has been passed to specific command\r\n"));
+		return EFI_INVALID_PARAMETER;
+	}
+
+	// allocate intermediate page for storing data from donor buffer
+	// EFI_PHYSICAL_ADDRESS InterimPage;
+	// EFI_STATUS Status = gSmst->SmmAllocatePages(AllocateAnyPages, EfiRuntimeServicesData, 1, &InterimPage);
+	// if(EFI_ERROR(Status)) {
+	// 	DEBUG((DEBUG_INFO, "[ SMM ] Unable to allocate intermediate page\r\n"));
+	// 	return Status;
+	// }
+	
+	EFI_PHYSICAL_ADDRESS Donor;
+	EFI_STATUS Status = gSmst->SmmAllocatePages(AllocateAnyPages, EfiRuntimeServicesData, 1, &Donor);
+	if(EFI_ERROR(Status)) {
+		DEBUG((DEBUG_INFO, "[ SMM ] Unable to allocate intermediate page\r\n"));
+		return Status;
+	}
+
+	char *ptr = (char *)Donor;
+	for (int i = 0; i < 128; ++i) {
+		ptr[i] = 'a';
+	}	
+
+	// UINT64 Donor = MemMapVirtualAddress(DataToWrite, gLiveSession.UmController.UmControllerDirBase, NULL);
+	if(Donor != NULL) {
+		// PhysMemCpy(InterimPage, Donor, LengthToWrite);
+
+		// MemRestoreSmramMappings();
+
+		// map target physical memory to the SMRAM
+		UINT64 PhysMapped = MemProcessOutsideSmramPhysMemory(AddressToWrite);
+		if(PhysMapped == 0) {
+			DEBUG((DEBUG_INFO, "[ SMM ] Unable to map physical memory to the SMRAM\r\n"));
+			gSmst->SmmFreePages(Donor, 1);
+			return EFI_ABORTED;
+		}
+
+		// copy data to the target address
+		PhysMemCpy(PhysMapped, Donor, LengthToWrite);
+
+		MemRestoreSmramMappings();
+	} else {
+		DEBUG((DEBUG_INFO, "[ SMM ] Unable to map donor buffer to the SMRAM\r\n"));
+		gSmst->SmmFreePages(Donor, 1);
+		return EFI_ABORTED;
+	}
+
+	gSmst->SmmFreePages(Donor, 1);
 
 	return EFI_SUCCESS;
 }
@@ -546,6 +631,7 @@ DeadwingSmiHandler (
     //
     // For the demonstration purpose ignore 0xff, which is pretty busy SMI.
     //
+
     if (commandNumber == 0xff || commandNumber == 0x00)
     {
         goto Exit;
@@ -553,13 +639,17 @@ DeadwingSmiHandler (
 
     DEBUG((EFI_D_INFO, "[DeadwingSmm] SMI 0x%02x\n", commandNumber));
 
-    char buffer[4096];
+    char buffer[128];
 
-    status = CmdPhysRead((void *)(0x7fffde20), buffer, 4096);
+    // status = CmdPhysRead((void *)(0x7fffde20), buffer, 4096);
 
-    // for (int i = 0; i < 50; i++) {
-    //     DEBUG((EFI_D_INFO, "[DeadwingSmm] SMI %d\n", buffer[i]));
-    // }
+	CmdPhysWrite((void *)0x7fffde20, NULL, 128);
+
+	CmdPhysRead((void *)(0x7fffde20), buffer, 128);
+
+    for (int i = 0; i < 128; i++) {
+        DEBUG((EFI_D_INFO, "[DeadwingSmm] SMI %d\n", buffer[i]));
+    }
 
 Exit:
     //
