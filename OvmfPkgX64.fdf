@@ -380,7 +380,6 @@ INF  OvmfPkg/QemuFlashFvbServicesRuntimeDxe/FvbServicesSmm.inf
 INF  MdeModulePkg/Universal/FaultTolerantWriteDxe/FaultTolerantWriteSmm.inf
 INF  MdeModulePkg/Universal/Variable/RuntimeDxe/VariableSmm.inf
 INF  MdeModulePkg/Universal/Variable/RuntimeDxe/VariableSmmRuntimeDxe.inf
-INF  OvmfPkg/HelloSmm/HelloSmm.inf
 INF  OvmfPkg/Deadwing/DeadwingSmm.inf
 
 !else

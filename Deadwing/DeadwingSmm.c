@@ -8,19 +8,18 @@
 #include <Library/SmmServicesTableLib.h>
 #include <Library/UefiLib.h>
 #include <Library/CpuLib.h>
-
 #include "PML4.h"
 #include "Defs.h"
+#include <Protocol/SmmVariable.h>
+#include <Library/MemoryAllocationLib.h>
 
-// EFI_SYSTEM_TABLE *gST;
-// EFI_BOOT_SERVICES *gBS;
-// EFI_RUNTIME_SERVICES *gRT;
+// a3a56e56-1d23-06dc-24bf-1473ff54e629
+#define MY_VARIABLE_GUID { 0xa3a56e56, 0x1d23, 0x06dc, {0x24, 0xbf, 0x14, 0x73, 0xff, 0x54, 0xe6, 0x29} }
 
-// EFI_SMM_SYSTEM_TABLE2 *gSmst2;
 
 EFI_PHYSICAL_ADDRESS gRemapPage;
 
-
+STATIC EFI_SMM_VARIABLE_PROTOCOL *mSmmVariable;
 STATIC EFI_MM_CPU_IO_PROTOCOL *mMmCpuIo;
 
 DEADWING_LIVE_SESSION_INFO gLiveSession;
@@ -531,40 +530,60 @@ DeadwingSmiHandler (
     IN OUT UINTN* CommBufferSize
     )
 {
-    EFI_STATUS status;
-    UINT8 commandNumber;
+    EFI_STATUS Status;
+    UINT8 APM_CNT_VALUE;
+	CHAR16 *MyVariableName = L"MyVariable";
+    EFI_GUID VendorGuid = MY_VARIABLE_GUID;
+    UINT32 Attributes;
+    UINTN VariableSize = 0;
+    VOID *VariableData = NULL;
 
-    //
-    // Read the SMI command value from the power management port. This port can
-    // be different on the other platforms, but this works on my target and all
-    // Intel systems I have. You may fetch the AX register value to check this
-    // using gEfiMmCpuProtocolGuid.
-    //
-    status = mMmCpuIo->Io.Read(mMmCpuIo, MM_IO_UINT8, ICH9_APM_CNT, 1, &commandNumber);
-    ASSERT_EFI_ERROR(status);
+    Status = mMmCpuIo->Io.Read(mMmCpuIo, MM_IO_UINT8, ICH9_APM_CNT, 1, &APM_CNT_VALUE);
+    ASSERT_EFI_ERROR(Status);
 
-    //
-    // For the demonstration purpose ignore 0xff, which is pretty busy SMI.
-    //
-    if (commandNumber == 0xff || commandNumber == 0x00)
+    if (APM_CNT_VALUE != 0x01)
     {
-        goto Exit;
+        return EFI_WARN_INTERRUPT_SOURCE_QUIESCED;
     }
 
-    DEBUG((EFI_D_INFO, "[DeadwingSmm] SMI 0x%02x\n", commandNumber));
+    DEBUG((EFI_D_INFO, "[DeadwingSmm] SMI 0x%02x\n", APM_CNT_VALUE));
+
+	Status = mSmmVariable->SmmGetVariable(
+        MyVariableName,
+        &VendorGuid,
+        &Attributes,
+        &VariableSize,
+        NULL
+    );
+    
+    if (Status == EFI_BUFFER_TOO_SMALL) {
+        VariableData = AllocateZeroPool(VariableSize);
+        if (VariableData == NULL) {
+            DEBUG((EFI_D_INFO, "AllocateZeroPool Failed\n"));
+            return EFI_WARN_INTERRUPT_SOURCE_QUIESCED;
+        }
+        Status = mSmmVariable->SmmGetVariable(
+            MyVariableName,
+            &VendorGuid,
+            &Attributes,
+            &VariableSize,
+            VariableData
+        );
+        if (!EFI_ERROR(Status)) {
+            DEBUG((EFI_D_INFO, "Variable Data: %lx\n", (*(UINT64 *)VariableData)));
+        } else {
+            DEBUG((EFI_D_INFO, "Get Variable failed: %r\n", Status));
+			return EFI_WARN_INTERRUPT_SOURCE_QUIESCED;
+        }
+    } else {
+        DEBUG((EFI_D_INFO, "Get Variable failed: %r\n", Status));
+		return EFI_WARN_INTERRUPT_SOURCE_QUIESCED;
+    }
 
     char buffer[4096];
 
-    status = CmdPhysRead((void *)(0x7fffde20), buffer, 4096);
-
-    // for (int i = 0; i < 50; i++) {
-    //     DEBUG((EFI_D_INFO, "[DeadwingSmm] SMI %d\n", buffer[i]));
-    // }
-
-Exit:
-    //
-    // Allow other SMI to run.
-    //
+    Status = CmdPhysRead((VOID *)(*(UINT64 *)VariableData), buffer, 4096);
+	FreePool(VariableData);
     return EFI_WARN_INTERRUPT_SOURCE_QUIESCED;
 }
 
@@ -575,28 +594,28 @@ DeadwingSmmInitialize (
     IN EFI_SYSTEM_TABLE* SystemTable
     )
 {
-    EFI_STATUS status;
-    EFI_HANDLE dispatchHandle;
+    EFI_STATUS Status;
+    EFI_HANDLE Handle;
 
     DEBUG((EFI_D_INFO, "[DeadwingSmm] DeadwingSmmInitialize called\n"));
 
-    status = gMmst->MmLocateProtocol(&gEfiMmCpuIoProtocolGuid, NULL, (VOID **)&mMmCpuIo);
-    ASSERT_EFI_ERROR(status);
+    Status = gMmst->MmLocateProtocol(&gEfiMmCpuIoProtocolGuid, NULL, (VOID **)&mMmCpuIo);
+    ASSERT_EFI_ERROR(Status);
 
-    //
-    // Register the root SMI handler.
-    //
-    status = gMmst->MmiHandlerRegister(DeadwingSmiHandler, NULL, &dispatchHandle);
-    ASSERT_EFI_ERROR(status);
+	Status = gSmst->SmmLocateProtocol(&gEfiSmmVariableProtocolGuid, NULL, (VOID **)&mSmmVariable);
+    ASSERT_EFI_ERROR(Status);
+   
+    Status = gMmst->MmiHandlerRegister(DeadwingSmiHandler, NULL, &Handle);
+    ASSERT_EFI_ERROR(Status);
 
     // allocate page for remaping virtual and physical addresses
-	status = gSmst->SmmAllocatePages(AllocateAnyPages, EfiRuntimeServicesData, 1, &gRemapPage);
-	if(EFI_ERROR(status)) {
+	Status = gSmst->SmmAllocatePages(AllocateAnyPages, EfiRuntimeServicesData, 1, &gRemapPage);
+	if(EFI_ERROR(Status)) {
 		DEBUG((EFI_D_INFO, "[ SMM ] Unable to allocate remap page\r\n"));
-		return status;
+		return Status;
 	}
 
 	gBS->SetMem(gRemapPage, EFI_PAGE_SIZE, 0);
 
-    return status;
+    return Status;
 }

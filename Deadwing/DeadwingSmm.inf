@@ -35,9 +35,12 @@
   UefiBootServicesTableLib	
   UefiDriverEntryPoint
   MmServicesTableLib
+  MemoryAllocationLib
 
 [Protocols]
   gEfiMmCpuIoProtocolGuid
+  gEfiSmmVariableProtocolGuid
 
 [Depex]
   gEfiMmCpuIoProtocolGuid
+  AND gEfiSmmVariableProtocolGuid

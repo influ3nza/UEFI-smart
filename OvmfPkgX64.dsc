@@ -1026,7 +1026,6 @@
       NULL|MdeModulePkg/Library/VarCheckPolicyLib/VarCheckPolicyLib.inf
   }
   MdeModulePkg/Universal/Variable/RuntimeDxe/VariableSmmRuntimeDxe.inf
-  OvmfPkg/HelloSmm/HelloSmm.inf
   OvmfPkg/Deadwing/DeadwingSmm.inf
 
 !else
