@@ -522,47 +522,17 @@ CmdPhysWrite(
 		return EFI_INVALID_PARAMETER;
 	}
 
-	// allocate intermediate page for storing data from donor buffer
-	// EFI_PHYSICAL_ADDRESS InterimPage;
-	// EFI_STATUS Status = gSmst->SmmAllocatePages(AllocateAnyPages, EfiRuntimeServicesData, 1, &InterimPage);
-	// if(EFI_ERROR(Status)) {
-	// 	DEBUG((DEBUG_INFO, "[SmartSmm] Unable to allocate intermediate page\r\n"));
-	// 	return Status;
-	// }
-	
-	EFI_PHYSICAL_ADDRESS Donor;
-	EFI_STATUS Status = gSmst->SmmAllocatePages(AllocateAnyPages, EfiRuntimeServicesData, 1, &Donor);
-	if(EFI_ERROR(Status)) {
-		DEBUG((DEBUG_INFO, "[SmartSmm] Unable to allocate intermediate page\r\n"));
-		return Status;
-	}
-
-	char *ptr = (char *)Donor;
-	for (int i = 0; i < 128; ++i) {
-		ptr[i] = 'a';
-	}	
-
-	// UINT64 Donor = MemMapVirtualAddress(DataToWrite, gLiveSession.UmController.UmControllerDirBase, NULL);
-	if(Donor != NULL) {
-		// map target physical memory to the SMRAM
-		UINT64 PhysMapped = MemProcessOutsideSmramPhysMemory(AddressToWrite);
-		if(PhysMapped == 0) {
-			DEBUG((DEBUG_INFO, "[SmartSmm] Unable to map physical memory to the SMRAM\r\n"));
-			gSmst->SmmFreePages(Donor, 1);
-			return EFI_ABORTED;
-		}
-
-		// copy data to the target address
-		PhysMemCpy(PhysMapped, Donor, LengthToWrite);
-
-		MemRestoreSmramMappings();
-	} else {
-		DEBUG((DEBUG_INFO, "[SmartSmm] Unable to map donor buffer to the SMRAM\r\n"));
-		gSmst->SmmFreePages(Donor, 1);
+	// map target physical memory to the SMRAM
+	UINT64 PhysMapped = MemProcessOutsideSmramPhysMemory(AddressToWrite);
+	if(PhysMapped == 0) {
+		DEBUG((DEBUG_INFO, "[SmartSmm] Unable to map physical memory to the SMRAM\r\n"));
 		return EFI_ABORTED;
 	}
 
-	gSmst->SmmFreePages(Donor, 1);
+	// copy data to the target address
+	PhysMemCpy(PhysMapped, DataToWrite, LengthToWrite);
+
+	MemRestoreSmramMappings();
 
 	return EFI_SUCCESS;
 }
@@ -651,7 +621,7 @@ SmartSmiHandler (
 
 		VOID *DataPtr = Req->ReadParameter.TargetAddress;
 		UINT64 BytesToRead = Req->ReadParameter.BytesToRead;
-		DEBUG((DEBUG_INFO, "into here, 0x%016lx, 0x%016lx\n", DataPtr, BytesToRead));
+		DEBUG((DEBUG_INFO, "into here, 0x%016lx, %ld\n", DataPtr, BytesToRead));
 		Status = CmdPhysRead(DataPtr, BufferAddress, BytesToRead);
 
 		for (UINT64 i = 0; i < BytesToRead; ++i) {
@@ -663,6 +633,12 @@ SmartSmiHandler (
 		VOID *DataPtr = Req->WriteParameter.TargetAddress;
 		UINT64 BytesToWrite = Req->WriteParameter.BytesToWrite;
 		VOID *DataToWrite = (void *)Req->WriteParameter.DataToWrite;
+
+		for (UINT64 i = 0; i < BytesToWrite; ++i) {
+			DEBUG((DEBUG_INFO, "%d ", ((UINT8 *)DataToWrite)[i]));
+		}
+		DEBUG((DEBUG_INFO, "\n"));
+
 		Status = CmdPhysWrite(DataPtr, DataToWrite, BytesToWrite);
 		ASSERT_EFI_ERROR(Status);
 	}
