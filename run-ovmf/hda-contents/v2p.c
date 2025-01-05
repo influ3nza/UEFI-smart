@@ -17,6 +17,7 @@ const int __endian_bit = 1;
 int i, c, pid, status;
 unsigned long virt_addr;
 int data_size;
+char *data_content;
 uint64_t read_val, file_offset, page_size;
 char path_buf [0x100] = {};
 FILE * f;
@@ -26,14 +27,15 @@ uint64_t phys_addr;
 enum CMD_TYPE {
     CMD_READ,
     CMD_WRITE
-};
+}cmd_type;
 
 int read_pagemap(char * path_buf, unsigned long virt_addr);
 int write_var(enum CMD_TYPE type);
 
 int main(int argc, char ** argv){
-    if(argc != 4){
-        printf("Argument number is not correct! It must like:\n./VtoP PID VIRTUAL_ADDRESS DATA_SIZE\n");
+    printf("%d\n", argc);
+    if(argc != 6 && argc != 5){
+        printf("Argument number is not correct! It must like:\n./VtoP PID VIRTUAL_ADDRESS METHOD(0:READ/1:WRITE) DATA_SIZE [DATA_CONTENT]\n");
         return -1;
     }
     if(!memcmp(argv[1], "self", sizeof("self"))){
@@ -51,12 +53,16 @@ int main(int argc, char ** argv){
     if(pid != -1)
         sprintf(path_buf, "/proc/%u/pagemap", pid);
 
-    data_size = strtol(argv[3], NULL, 10);
+    cmd_type = strtol(argv[3], NULL, 10);
+
+    data_size = strtol(argv[4], NULL, 10);
+
+    data_content = argv[5];
 
     page_size = getpagesize();
     read_pagemap(path_buf, virt_addr);
 
-    write_var(CMD_READ);
+    write_var(cmd_type);
     return 0;
 }
 
@@ -106,32 +112,49 @@ int read_pagemap(char * path_buf, unsigned long virt_addr){
     return 0;
 }
 
+void convertStringToUint8Array(const char *input, uint8_t *output, size_t *size) {
+    char *token;
+    char *inputCopy = strdup(input);
+    size_t i = 0;
+
+    token = strtok(inputCopy, " ");
+    while (token != NULL) {
+        output[i] = (uint8_t)strtol(token, NULL, 16);
+        i++;
+        token = strtok(NULL, " ");
+    }
+
+    *size = i;
+    free(inputCopy);
+}
+
 int write_var(enum CMD_TYPE type) {
     printf("Ready to write in var\n\tparameterID: %d\n\ttarget phys addr: 0x%llx\n\tdata_size: %d\n", type, phys_addr, data_size);
+    if (type == 1) {
+        printf("Write data: %s\n", data_content);
+    }
     
-    uint8_t cc[4 + sizeof(uint64_t) + sizeof(uint64_t) + sizeof(uint64_t)] = {
+    uint8_t cc[4 + sizeof(uint64_t) + sizeof(uint64_t) + sizeof(uint64_t) + 128] = {
         0x07, 0x00, 0x00, 0x00
     };
-    // memset(cc, 0, sizeof(cc));
 
-    // 填入type
     uint64_t type_64 = (uint64_t) type;
     memcpy(cc + 4, &type_64, sizeof(uint64_t));
 
-    // 填入phys_addr
     memcpy(cc + 4 + sizeof(uint64_t), &phys_addr, sizeof(uint64_t));
 
-    // 填入data_size
     uint64_t data_size_64 = (uint64_t) data_size;
     memcpy(cc + 4 + sizeof(uint64_t) + sizeof(uint64_t), &data_size_64, sizeof(uint64_t));
+
+    int array_size = 0;
+    if (type)
+        convertStringToUint8Array(data_content, cc + 4 + 3*sizeof(uint64_t), &array_size);
 
     printf("cc array contents:\n");
     for (size_t i = 0; i < sizeof(cc); ++i) {
         printf("%02X ", cc[i]);
     }
     printf("\n");
-
-    printf("Retry with file writer...\n");
 
     // 打开文件
     int fd = open(VAR_PATH, O_WRONLY | O_CREAT);
@@ -141,9 +164,10 @@ int write_var(enum CMD_TYPE type) {
     }
 
     // 写入数字
-    ssize_t bytes_written = write(fd, cc, sizeof(cc));
+    int need_write_size = type ? (4 + sizeof(uint64_t) + sizeof(uint64_t) + sizeof(uint64_t) + data_size) : (4 + sizeof(uint64_t) + sizeof(uint64_t) + sizeof(uint64_t));
+    ssize_t bytes_written = write(fd, cc, need_write_size);
     printf("bytes_writter: %d\n", bytes_written);
-    if (bytes_written != sizeof(cc)) {
+    if (bytes_written != need_write_size) {
         perror("Error writing to file");
         close(fd);
         return 1;
