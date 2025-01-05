@@ -136,7 +136,7 @@ MemRemapAddress(
 
 	// get SMRAM PDPE
 	UINT64 Cr0;
-	PPDPE Pdpe = (PPDPE)((Pml4.Bits.Pfn << EFI_PAGE_SHIFT) + ((OldAddress >> 30) & 0x1FF) * sizeof(UINT64));
+	PPTE3 Pdpe = (PPTE3)((Pml4.Bits.Pfn << EFI_PAGE_SHIFT) + ((OldAddress >> 30) & 0x1FF) * sizeof(UINT64));
 	if(Pdpe->Bits.Present) {
 		if(Pdpe->Bits.Size) {
 			// current virtual address has 1gb page, remap it
@@ -161,7 +161,7 @@ MemRemapAddress(
 	}
 
 	// get SMRAM PDE
-	PPDE Pde = (PPDE)((Pdpe->Bits.Pfn << EFI_PAGE_SHIFT) + ((OldAddress >> 21) & 0x1FF) * sizeof(UINT64));
+	PPTE2 Pde = (PPTE2)((Pdpe->Bits.Pfn << EFI_PAGE_SHIFT) + ((OldAddress >> 21) & 0x1FF) * sizeof(UINT64));
 	if(Pde->Bits.Present) {
 		if(Pde->Bits.Size) {
 			// current virtual address has 2mb page, remap it
@@ -266,7 +266,7 @@ MemTranslateVirtualToPhys(
 	}
 
 	// remap PDP
-	PDPE Pdpe;
+	PTE3 Pdpe;
 	if(Pml4.Bits.Present) {
 		ReadAddress = Pml4.Bits.Pfn << EFI_PAGE_SHIFT;
 		if(MemRemapAddress(gRemapPage, ReadAddress, SmmDir, &PageSize)) {
@@ -291,7 +291,7 @@ MemTranslateVirtualToPhys(
 	}
 	
 	// remap PDE
-	PDE Pde;
+	PTE2 Pde;
 	if(Pdpe.Bits.Present) {
 		// check if page is 1gb size, translate if it's true
 		if(Pdpe.Bits.Size)

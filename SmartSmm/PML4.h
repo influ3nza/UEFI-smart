@@ -21,7 +21,7 @@ typedef union PTE4 {
     } Bits;
 } PTE4, *PPTE4;
 
-typedef union PDPE {
+typedef union _PTE3 {
     UINT64 Value;
     struct {
         UINT64 Present : 1;
@@ -38,9 +38,9 @@ typedef union PDPE {
         UINT64 Ignored1 : 11;
         UINT64 ExecutionDisabled : 1;
     } Bits;
-} PDPE, *PPDPE;
+} PTE3, *PPTE3;
 
-typedef union _PDE {
+typedef union _PTE2 {
     UINT64 Value;
     struct {
         UINT64 Present : 1;
@@ -57,7 +57,7 @@ typedef union _PDE {
         UINT64 Ignored1 : 11;
         UINT64 ExecutionDisabled : 1;
     } Bits;
-} PDE, *PPDE;
+} PTE2, *PPTE2;
 
 typedef union _PTE {
     UINT64 Value;

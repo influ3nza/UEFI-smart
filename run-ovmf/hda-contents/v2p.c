@@ -109,42 +109,27 @@ int read_pagemap(char * path_buf, unsigned long virt_addr){
 int write_var(enum CMD_TYPE type) {
     printf("Ready to write in var\n\tparameterID: %d\n\ttarget phys addr: 0x%llx\n\tdata_size: %d\n", type, phys_addr, data_size);
     
-    uint8_t cc[sizeof(uint64_t) + sizeof(uint64_t) + sizeof(uint64_t)];
-    memset(cc, 0, sizeof(cc));
+    uint8_t cc[4 + sizeof(uint64_t) + sizeof(uint64_t) + sizeof(uint64_t)] = {
+        0x07, 0x00, 0x00, 0x00
+    };
+    // memset(cc, 0, sizeof(cc));
 
     // 填入type
     uint64_t type_64 = (uint64_t) type;
-    memcpy(cc, &type_64, sizeof(uint64_t));
+    memcpy(cc + 4, &type_64, sizeof(uint64_t));
 
     // 填入phys_addr
-    memcpy(cc + sizeof(uint64_t), &phys_addr, sizeof(uint64_t));
+    memcpy(cc + 4 + sizeof(uint64_t), &phys_addr, sizeof(uint64_t));
 
     // 填入data_size
     uint64_t data_size_64 = (uint64_t) data_size;
-    memcpy(cc + sizeof(uint64_t) + sizeof(uint64_t), &data_size_64, sizeof(uint64_t));
+    memcpy(cc + 4 + sizeof(uint64_t) + sizeof(uint64_t), &data_size_64, sizeof(uint64_t));
 
     printf("cc array contents:\n");
     for (size_t i = 0; i < sizeof(cc); ++i) {
         printf("%02X ", cc[i]);
     }
     printf("\n");
-
-    // char command[1024] = "./modify_var.sh \"";
-    // char temp[5];
-
-    // for (size_t i = 0; i < sizeof(cc); ++i) {
-    //     snprintf(temp, sizeof(temp), "\\x%02X", cc[i]);
-    //     strcat(command, temp);
-    // }
-
-    // strcat(command, "\"");
-
-    // printf("Command: %s\n", command);
-
-    // int result = system(command);
-    // if (result != 0) {
-    //     fprintf(stderr, "Failed to execute script.\n");
-    // }
 
     printf("Retry with file writer...\n");
 
