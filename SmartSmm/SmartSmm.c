@@ -69,7 +69,6 @@ MemCheckPagingEnabled(
 	// check if PG bit is not set
 	UINT64 Cr0 = AsmReadCr0();
 	if(!(Cr0 & CR0_PG)) {
-		// SerialPrint("[SmartSmm] PG bit is not enabled\r\n");
 		return FALSE;
 	}
 
@@ -82,7 +81,6 @@ MemCheckPagingEnabled(
 		// check if PSE set. If it's 1, halt next operations, because
 		// we're not working with 4MB pages
 		if(Cr4 & CR4_PSE) {
-			// SerialPrint("[SmartSmm] 4MB pages enabled, exiting from translation process\r\n");
 			return FALSE;
 		}
 	}
@@ -90,7 +88,6 @@ MemCheckPagingEnabled(
 	// read EFER MSR to check if LMA set
 	UINT64 Efer = AsmReadMsr64(IA32_AMD64_EFER);
 	if(!(Efer & EFER_LMA)) {
-		// SerialPrint("[SmartSmm] LMA bit is not set\r\n");
 		return FALSE;
 	}
 
@@ -126,8 +123,8 @@ MemRemapAddress(
 ) {
 	SmmDir &= 0xFFFFFFFFFFFFF000;
 
-    DEBUG((EFI_D_INFO, "[SmartSmm] MemRemapAddress\n"));
-    DEBUG((EFI_D_INFO, "[SmartSmm] old address %x\n", OldAddress));
+    DEBUG((DEBUG_INFO, "[SmartSmm] MemRemapAddress\n"));
+    DEBUG((DEBUG_INFO, "[SmartSmm] old address %x\n", OldAddress));
 
 	// copy SMRAM PML4
 	PML4E Pml4;
@@ -135,7 +132,7 @@ MemRemapAddress(
 	if(!Pml4.Bits.Present)
 		return FALSE;
 
-    DEBUG((EFI_D_INFO, "[SmartSmm] PML4 bits present\n"));
+    DEBUG((DEBUG_INFO, "[SmartSmm] PML4 bits present\n"));
 
 	// get SMRAM PDPE
 	UINT64 Cr0;
@@ -159,7 +156,7 @@ MemRemapAddress(
 			return TRUE;
 		}
 	} else {
-        DEBUG((EFI_D_INFO, "[SmartSmm] pdpe bits not present\n"));
+        DEBUG((DEBUG_INFO, "[SmartSmm] pdpe bits not present\n"));
 		return FALSE;
 	}
 
@@ -184,7 +181,7 @@ MemRemapAddress(
 			return TRUE;
 		}
 	} else {
-        DEBUG((EFI_D_INFO, "[SmartSmm] pde bits not present\n"));
+        DEBUG((DEBUG_INFO, "[SmartSmm] pde bits not present\n"));
 		return FALSE;
 	}
 
@@ -207,7 +204,7 @@ MemRemapAddress(
 		return TRUE;
 	}
 
-    DEBUG((EFI_D_INFO, "[SmartSmm] pte bits not present\n"));
+    DEBUG((DEBUG_INFO, "[SmartSmm] pte bits not present\n"));
 	return FALSE;
 }
 
@@ -265,7 +262,6 @@ MemTranslateVirtualToPhys(
 
 		MemRestoreSmramMappings();
 	} else {
-		// SerialPrint("[SmartSmm] Unable to remap PML4\r\n");
 		return 0;
 	}
 
@@ -288,11 +284,9 @@ MemTranslateVirtualToPhys(
 			
 			MemRestoreSmramMappings();
 		} else {
-			// SerialPrint("[SmartSmm] Unable to remap PDPE\r\n");
 			return 0;
 		}
 	} else {
-		// SerialPrint("[SmartSmm] PML4 is not present for current virtual address\r\n");
 		return 0;
 	}
 	
@@ -319,11 +313,9 @@ MemTranslateVirtualToPhys(
 		
 			MemRestoreSmramMappings();
 		} else {
-			// SerialPrint("[SmartSmm] Unable to remap PDE\r\n");
 			return 0;
 		}
 	} else {
-		// SerialPrint("[SmartSmm] PDPE is not present for current virtual address\r\n");
 		return 0;
 	}
 
@@ -348,11 +340,9 @@ MemTranslateVirtualToPhys(
 
 			MemRestoreSmramMappings();
 		} else {
-			// SerialPrint("[SmartSmm] Unable to remap PTE\r\n");
 			return 0;
 		}
 	} else {
-		// SerialPrint("[SmartSmm] PDE is not present for current virtual address\r\n");
 		return 0;
 	}
 
@@ -379,7 +369,7 @@ MemProcessOutsideSmramPhysMemory(
 	UINT8 PageSize = Page4K;
 	UINT64 RemapedMemory = gRemapPage;
 	UINT64 SmmDir = AsmReadCr3();
-    DEBUG((EFI_D_INFO, "[SmartSmm] SmmDir: 0x%016lx, 0x%016lx, 0x%016lx\n", SmmDir, RemapedMemory, PhysAddress));
+    DEBUG((DEBUG_INFO, "[SmartSmm] SmmDir: 0x%016lx, 0x%016lx, 0x%016lx\n", SmmDir, RemapedMemory, PhysAddress));
     
 	if(MemRemapAddress(gRemapPage, PhysAddress, SmmDir, &PageSize)) {		
 		if(PageSize == Page1G) {
@@ -415,32 +405,32 @@ MemMapVirtualAddress(
 	UINT64 TranslatedAddress;
 	UINT64 PhysRemaped;
 
-    DEBUG((EFI_D_INFO, "[SmartSmm] MemMapVA\n"));
+    DEBUG((DEBUG_INFO, "[SmartSmm] MemMapVA\n"));
 
 	if(!VirtualAddress || !DirBase)
 		return 0;
 
-    DEBUG((EFI_D_INFO, "[SmartSmm] valid Virtual address\n"));
+    DEBUG((DEBUG_INFO, "[SmartSmm] valid Virtual address\n"));
 
 	PhysRemaped = 0;
 
 	if(!MemCheckPagingEnabled())
 		return 0;
 
-    DEBUG((EFI_D_INFO, "[SmartSmm] paging enabled\n"));
+    DEBUG((DEBUG_INFO, "[SmartSmm] paging enabled\n"));
 
 	// translate virtual address to physical
 	TranslatedAddress = MemTranslateVirtualToPhys(VirtualAddress, DirBase);
-    DEBUG((EFI_D_INFO, "[SmartSmm] Translated address: %x\n", TranslatedAddress));
+    DEBUG((DEBUG_INFO, "[SmartSmm] Translated address: %x\n", TranslatedAddress));
 	if(TranslatedAddress != 0) {
 		// map physical address into the SMRAM memory 
 		PhysRemaped = MemProcessOutsideSmramPhysMemory(TranslatedAddress);
 		if(PhysRemaped == 0) {
-            DEBUG((EFI_D_INFO, "[SmartSmm] phys remapped is 0\n"));
+            DEBUG((DEBUG_INFO, "[SmartSmm] phys remapped is 0\n"));
 			return 0;
         }
 
-        DEBUG((EFI_D_INFO, "[SmartSmm] physRemapped not 0\n"));
+        DEBUG((DEBUG_INFO, "[SmartSmm] physRemapped not 0\n"));
 	}
 
 	if(UnmappedAddress)
@@ -456,37 +446,37 @@ CmdPhysRead(
 	IN VOID   *ReceivedInfo,
 	IN UINT64  LengthToRead
 ) {
-	DEBUG((EFI_D_INFO, "[SmartSmm] Reading from physical memory\r\n"));
+	DEBUG((DEBUG_INFO, "[SmartSmm] Reading from physical memory\r\n"));
 
 	BOOLEAN check = MemCheckPagingEnabled();
 	if (check == TRUE) {
-		DEBUG((EFI_D_INFO, "[SmartSmm] SMI enabled\n"));
+		DEBUG((DEBUG_INFO, "[SmartSmm] SMI enabled\n"));
 	} else {
-		DEBUG((EFI_D_INFO, "[SmartSmm] SMI not enabled\n"));
+		DEBUG((DEBUG_INFO, "[SmartSmm] SMI not enabled\n"));
 	}
 
 	// validate input
 	if((!AddressToRead || !LengthToRead || !ReceivedInfo) || LengthToRead > BASE_4KB) {
-        DEBUG((EFI_D_INFO, "[SmartSmm] Invalid parameters has been passed to specific command\r\n"));
+        DEBUG((DEBUG_INFO, "[SmartSmm] Invalid parameters has been passed to specific command\r\n"));
 		return EFI_INVALID_PARAMETER;
 	}
 
-    DEBUG((EFI_D_INFO, "[SmartSmm] Input validated\r\n"));
+    DEBUG((DEBUG_INFO, "[SmartSmm] Input validated\r\n"));
 
 	// map physical address to the SMRAM
 	UINT64 PhysMapped = MemProcessOutsideSmramPhysMemory(AddressToRead);
 	if(PhysMapped != 0) {
 		// copy data to intermediate page
-        DEBUG((EFI_D_INFO, "[SmartSmm Prepare to phsmemcpy\r\n"));
+        DEBUG((DEBUG_INFO, "[SmartSmm Prepare to phsmemcpy\r\n"));
 
 		PhysMemCpy(ReceivedInfo, PhysMapped, LengthToRead);
 
-        DEBUG((EFI_D_INFO, "[SmartSmm] 0x%016lx, 0x%016lx\r\n", PhysMapped, AddressToRead));
+        DEBUG((DEBUG_INFO, "[SmartSmm] 0x%016lx, 0x%016lx\r\n", PhysMapped, AddressToRead));
 
 
 		MemRestoreSmramMappings();
 	} else {
-		DEBUG((EFI_D_INFO, "[SmartSmm] Unable to map physical address\r\n"));
+		DEBUG((DEBUG_INFO, "[SmartSmm] Unable to map physical address\r\n"));
 		return EFI_ABORTED;
 	}
 
@@ -563,7 +553,7 @@ SmartSmiHandler (
         return EFI_WARN_INTERRUPT_SOURCE_QUIESCED;
     }
 
-    DEBUG((EFI_D_INFO, "[SmartSmm] SMI 0x%02x\n", APM_CNT_VALUE));
+    DEBUG((DEBUG_INFO, "[SmartSmm] SMI 0x%02x\n", APM_CNT_VALUE));
 
 	Status = mSmmVariable->SmmGetVariable(
         MyVariableName,
@@ -578,7 +568,7 @@ SmartSmiHandler (
     if (Status == EFI_BUFFER_TOO_SMALL) {
         VariableData = AllocateZeroPool(VariableSize > 4096 ? VariableData : 4096);
         if (VariableData == NULL) {
-            DEBUG((EFI_D_INFO, "AllocateZeroPool Failed\n"));
+            DEBUG((DEBUG_INFO, "AllocateZeroPool Failed\n"));
             return EFI_WARN_INTERRUPT_SOURCE_QUIESCED;
         }
         Status = mSmmVariable->SmmGetVariable(
@@ -590,7 +580,7 @@ SmartSmiHandler (
         );
 
         if (!EFI_ERROR(Status)) {
-            DEBUG((EFI_D_INFO, "Variable Data: 0x%016lx\n", VariableData));
+            DEBUG((DEBUG_INFO, "Variable Data: 0x%016lx\n", VariableData));
 
 			for (UINT64 j = 0; j < VariableSize; ++j) {
 				DEBUG((DEBUG_INFO, "0x%02x ", ((UINT8 *)VariableData)[j]));
@@ -598,14 +588,14 @@ SmartSmiHandler (
 			DEBUG((DEBUG_INFO, "\n"));
 
         } else {
-            DEBUG((EFI_D_INFO, "Get Variable failed: %r\n", Status));
+            DEBUG((DEBUG_INFO, "Get Variable failed: %r\n", Status));
 			return EFI_WARN_INTERRUPT_SOURCE_QUIESCED;
         }
 
 		Req = (RequestParameters *)VariableData;
 
     } else {
-        DEBUG((EFI_D_INFO, "Get Variable failed: %r\n", Status));
+        DEBUG((DEBUG_INFO, "Get Variable failed: %r\n", Status));
 		return EFI_WARN_INTERRUPT_SOURCE_QUIESCED;
     }
 
@@ -657,7 +647,7 @@ SmartSmmInitialize (
     EFI_STATUS Status;
     EFI_HANDLE Handle;
 
-    DEBUG((EFI_D_INFO, "[SmartSmm] SmartSmmInitialize called\n"));
+    DEBUG((DEBUG_INFO, "[SmartSmm] SmartSmmInitialize called\n"));
 
     Status = gMmst->MmLocateProtocol(&gEfiMmCpuIoProtocolGuid, NULL, (VOID **)&mMmCpuIo);
     ASSERT_EFI_ERROR(Status);
@@ -671,7 +661,7 @@ SmartSmmInitialize (
     // allocate page for remaping virtual and physical addresses
 	Status = gSmst->SmmAllocatePages(AllocateAnyPages, EfiRuntimeServicesData, 1, &gRemapPage);
 	if(EFI_ERROR(Status)) {
-		DEBUG((EFI_D_INFO, "[SmartSmm] Unable to allocate remap page\r\n"));
+		DEBUG((DEBUG_INFO, "[SmartSmm] Unable to allocate remap page\r\n"));
 		return Status;
 	}
 
