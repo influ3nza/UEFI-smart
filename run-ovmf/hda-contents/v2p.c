@@ -129,22 +129,45 @@ int write_var(enum CMD_TYPE type) {
     }
     printf("\n");
 
-    char command[1024] = "./modify_var.sh \"";
-    char temp[5];
+    // char command[1024] = "./modify_var.sh \"";
+    // char temp[5];
 
-    for (size_t i = 0; i < sizeof(cc); ++i) {
-        snprintf(temp, sizeof(temp), "\\x%02X", cc[i]);
-        strcat(command, temp);
+    // for (size_t i = 0; i < sizeof(cc); ++i) {
+    //     snprintf(temp, sizeof(temp), "\\x%02X", cc[i]);
+    //     strcat(command, temp);
+    // }
+
+    // strcat(command, "\"");
+
+    // printf("Command: %s\n", command);
+
+    // int result = system(command);
+    // if (result != 0) {
+    //     fprintf(stderr, "Failed to execute script.\n");
+    // }
+
+    printf("Retry with file writer...\n");
+
+    // 打开文件
+    int fd = open(VAR_PATH, O_WRONLY | O_CREAT);
+    if (fd == -1) {
+        perror("Error opening file");
+        return 1;
     }
 
-    strcat(command, "\"");
-
-    printf("Command: %s\n", command);
-
-    int result = system(command);
-    if (result != 0) {
-        fprintf(stderr, "Failed to execute script.\n");
+    // 写入数字
+    ssize_t bytes_written = write(fd, cc, sizeof(cc));
+    printf("bytes_writter: %d\n", bytes_written);
+    if (bytes_written != sizeof(cc)) {
+        perror("Error writing to file");
+        close(fd);
+        return 1;
     }
+
+    // 关闭文件
+    close(fd);
+
+    printf("Successfully wrote %ld bytes to %s\n", bytes_written, VAR_PATH);
 
     return 0;
 }
