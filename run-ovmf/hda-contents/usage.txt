@@ -1,3 +1,0 @@
-hacksleep: ./hacksleep, will run continuously, use ctrl+Z to stop it
-v2p: ./v2p <proc id> <0xdeadbeef>
-modify_var
