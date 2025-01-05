@@ -2,7 +2,7 @@
 
 #pragma pack(1)
 
-typedef union _PML4E {
+typedef union PTE4 {
     UINT64 Value;
     struct {
         UINT64 Present : 1;
@@ -19,7 +19,7 @@ typedef union _PML4E {
         UINT64 Ignored1 : 11;
         UINT64 ExecutionDisabled : 1;
     } Bits;
-} PML4E, *PPML4E;
+} PTE4, *PPTE4;
 
 typedef union PDPE {
     UINT64 Value;

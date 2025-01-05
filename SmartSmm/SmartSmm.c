@@ -127,7 +127,7 @@ MemRemapAddress(
     DEBUG((DEBUG_INFO, "[SmartSmm] old address %x\n", OldAddress));
 
 	// copy SMRAM PML4
-	PML4E Pml4;
+	PTE4 Pml4;
 	Pml4.Value = *(UINT64 *)(sizeof(UINT64) * ((OldAddress >> 39) & 0x1FF) + SmmDir);
 	if(!Pml4.Bits.Present)
 		return FALSE;
@@ -245,7 +245,7 @@ MemTranslateVirtualToPhys(
 	UINT64 SmmDir = AsmReadCr3() & 0xFFFFFFFFFFFFF000ULL;
 
 	// remap PML4
-	PML4E Pml4;
+	PTE4 Pml4;
 	UINT8 PageSize = Page4K;
 	if(MemRemapAddress(gRemapPage, Dir, SmmDir, &PageSize)) {
 		TargetAddress = gRemapPage;
