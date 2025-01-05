@@ -14,6 +14,8 @@ int main() {
     printf("Pointer p: %p\n", (void*)p);
 
     int d;
+    scanf("%d", &d);
+
     for (int i = 0; i < 10; ++i) {
         printf("%d ", p[i]);
     }
